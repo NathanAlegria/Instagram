@@ -8,6 +8,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+
 /**
  *
  * @author Nathan
@@ -30,12 +31,28 @@ public class FileManager {
         File dest = new File(InstaPaths.userImagesFolder(username), newName);
         Files.copy(sourceFile.toPath(), dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
 
-        // Nota humana: guardamos solo el nombre para que el proyecto sea portable
+        return newName;
+    }
+
+    public static String saveUserSticker(String username, File sourceFile) throws IOException {
+        InstaPaths.ensureBaseStructure();
+        InstaPaths.ensureUserStructure(username);
+
+        String ext = getExtension(sourceFile.getName());
+        String newName = "sticker_" + System.currentTimeMillis() + ext;
+
+        File dest = new File(InstaPaths.userPersonalStickers(username), newName);
+        Files.copy(sourceFile.toPath(), dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
+
         return newName;
     }
 
     public static String getUserImageAbsolutePath(String username, String imageName) {
         return new File(InstaPaths.userImagesFolder(username), imageName).getAbsolutePath();
+    }
+
+    public static String getUserStickerAbsolutePath(String username, String stickerName) {
+        return new File(InstaPaths.userPersonalStickers(username), stickerName).getAbsolutePath();
     }
 
     public static String getGlobalAbsolutePath(String fileName) {

@@ -8,9 +8,6 @@ package instagram;
  *
  * @author Nathan
  */
-public final class Config {
-    public static final VisualMode MODO = VisualMode.DESKTOP;
-
-    private Config() {
-    }
+public class ImageUtils {
+    
 }

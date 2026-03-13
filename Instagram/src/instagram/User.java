@@ -4,10 +4,10 @@
  */
 package instagram;
 
-import java.io.Serializable;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+
 /**
  *
  * @author Nathan
@@ -18,20 +18,14 @@ import java.util.List;
  * - estado activo/inactivo
  * - tipo de cuenta PUBLIC/PRIVATE (requisito)
  */
-public class User implements Serializable {
-
+public class User extends AbstractAccount {
     private static final long serialVersionUID = 1L;
 
     private String nombre;
     private char genero;
-    private String username;
-    private String password;
     private int edad;
-    private String fotoPath;         // solo nombre del archivo
+    private String fotoPath;
     private LocalDate joinDate;
-    private boolean isActive;
-
-    private AccountType accountType; // 🚨 requisito: PUBLIC / PRIVATE
 
     private List<Post> posts;
     private List<String> followers;
@@ -46,8 +40,6 @@ public class User implements Serializable {
         this.fotoPath = fotoPath;
         this.joinDate = LocalDate.now();
         this.isActive = true;
-
-        // Por defecto público, luego el usuario lo cambia en su perfil
         this.accountType = AccountType.PUBLIC;
 
         this.posts = new ArrayList<>();
@@ -55,45 +47,64 @@ public class User implements Serializable {
         this.followings = new ArrayList<>();
     }
 
-    public String getNombre() { return nombre; }
-    public char getGenero() { return genero; }
-    public String getUsername() { return username; }
-    public String getPassword() { return password; }
-    public int getEdad() { return edad; }
-    public String getFotoPath() { return fotoPath; }
-    public LocalDate getJoinDate() { return joinDate; }
+    public String getNombre() {
+        return nombre;
+    }
 
-    public List<Post> getPosts() { return posts; }
-    public List<String> getFollowers() { return followers; }
-    public List<String> getFollowings() { return followings; }
+    public char getGenero() {
+        return genero;
+    }
 
-    public boolean isActive() { return isActive; }
-    public void setActive(boolean active) { isActive = active; }
+    public int getEdad() {
+        return edad;
+    }
 
-    public AccountType getAccountType() { return accountType; }
-    public void setAccountType(AccountType accountType) { this.accountType = accountType; }
-    public boolean isPrivateAccount() { return accountType == AccountType.PRIVATE; }
+    public String getFotoPath() {
+        return fotoPath;
+    }
 
-    // Acciones
-    public void addPost(Post post) { this.posts.add(0, post); }
+    public LocalDate getJoinDate() {
+        return joinDate;
+    }
+
+    public List<Post> getPosts() {
+        return posts;
+    }
+
+    public List<String> getFollowers() {
+        return followers;
+    }
+
+    public List<String> getFollowings() {
+        return followings;
+    }
+
+    public void addPost(Post post) {
+        this.posts.add(0, post);
+    }
 
     public boolean isFollowing(String targetUsername) {
-        return followings.contains(targetUsername);
+        return followings.stream().anyMatch(f -> f.equalsIgnoreCase(targetUsername));
     }
 
     public void follow(String targetUsername) {
-        if (!isFollowing(targetUsername)) followings.add(targetUsername);
+        if (!isFollowing(targetUsername)) {
+            followings.add(targetUsername);
+        }
     }
 
     public void unfollow(String targetUsername) {
-        followings.remove(targetUsername);
+        followings.removeIf(f -> f.equalsIgnoreCase(targetUsername));
     }
 
     public void addFollower(String followerUsername) {
-        if (!followers.contains(followerUsername)) followers.add(followerUsername);
+        boolean exists = followers.stream().anyMatch(f -> f.equalsIgnoreCase(followerUsername));
+        if (!exists) {
+            followers.add(followerUsername);
+        }
     }
 
     public void removeFollower(String followerUsername) {
-        followers.remove(followerUsername);
+        followers.removeIf(f -> f.equalsIgnoreCase(followerUsername));
     }
 }

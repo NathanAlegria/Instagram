@@ -8,7 +8,6 @@ package instagram;
  *
  * @author Nathan
  */
-
 public enum MessageType {
-    TEXT, STICKER
+    TEXT, STICKER_EMOJI, STICKER_IMAGE
 }

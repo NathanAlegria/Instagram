@@ -16,16 +16,8 @@ public class Main {
         SwingUtilities.invokeLater(() -> {
             JFrame frame = new JFrame("INSTA - Red Social Visual");
             frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-
-            InstagramProject app = new InstagramProject();
-            frame.setContentPane(app);
-
-            if (Config.MODO == VisualMode.MOBILE) {
-                frame.setSize(390, 844);
-            } else {
-                frame.setSize(1366, 768);
-            }
-
+            frame.setContentPane(new InstagramProject());
+            frame.setSize(1366, 768);
             frame.setLocationRelativeTo(null);
             frame.setVisible(true);
         });
