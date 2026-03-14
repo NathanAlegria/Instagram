@@ -10,9 +10,10 @@ import javax.swing.*;
  *
  * @author Nathan
  */
-
 public class Main {
     public static void main(String[] args) {
+        ChatServerStarter.startIfNeeded();
+
         SwingUtilities.invokeLater(() -> {
             JFrame frame = new JFrame("INSTA - Red Social Visual");
             frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);

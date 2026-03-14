@@ -22,11 +22,6 @@ import java.util.List;
  *
  * @author Nathan
  */
-/**
- * InstagramProject (UI) - CardLayout global: LOGIN / REGISTER / ROOT_VIEW -
- * CardLayout centro: MAIN / PROFILE_SEARCH / CREATE_POST / HASHTAG_SEARCH /
- * NOTIFICATIONS / INBOX
- */
 public class InstagramProject extends JPanel {
 
     private final Color BG = new Color(0, 0, 0);
@@ -42,12 +37,21 @@ public class InstagramProject extends JPanel {
 
     private CardLayout contentLayout;
     private JPanel contentPanel;
+    private String currentContentCard = "FEED";
+
+    private CardLayout searchViewLayout;
+    private JPanel searchViewPanel;
+    private JPanel profileViewWrapper;
+    private String currentProfileUsername;
+
+    private JPanel bannerHost;
+    private JPanel confirmHost;
 
     private UserManager userManager;
     private User loggedUser;
 
     private JPanel feedInner;
-    private JPanel searchContainer;
+
     private JPanel searchResultsPanel;
     private JTextField txtSearchUser;
 
@@ -60,10 +64,7 @@ public class InstagramProject extends JPanel {
     private JLabel chatTitleLabel;
     private String openedChatUser;
 
-    private CardLayout searchViewLayout;
-    private JPanel searchViewPanel;
-    private JPanel profileViewWrapper;
-    private String currentProfileUsername;
+    private ChatClient chatClient;
 
     public InstagramProject() {
         userManager = UserManager.getInstance();
@@ -71,8 +72,27 @@ public class InstagramProject extends JPanel {
         setLayout(new BorderLayout());
         setBackground(BG);
 
+        bannerHost = new JPanel();
+        bannerHost.setOpaque(false);
+        bannerHost.setLayout(new BoxLayout(bannerHost, BoxLayout.Y_AXIS));
+        bannerHost.setBorder(new EmptyBorder(8, 8, 8, 8));
+
+        confirmHost = new JPanel();
+        confirmHost.setOpaque(false);
+        confirmHost.setLayout(new BoxLayout(confirmHost, BoxLayout.Y_AXIS));
+        confirmHost.setBorder(new EmptyBorder(0, 8, 8, 8));
+
+        JPanel topStack = new JPanel();
+        topStack.setOpaque(false);
+        topStack.setLayout(new BoxLayout(topStack, BoxLayout.Y_AXIS));
+        topStack.add(bannerHost);
+        topStack.add(confirmHost);
+
+        add(topStack, BorderLayout.NORTH);
+
         rootLayout = new CardLayout();
         rootPanel = new JPanel(rootLayout);
+        rootPanel.setBackground(BG);
 
         rootPanel.add(createLoginPanel(), "LOGIN");
         rootPanel.add(createRegisterPanel(), "REGISTER");
@@ -104,6 +124,11 @@ public class InstagramProject extends JPanel {
         return root;
     }
 
+    private void showContent(String card) {
+        currentContentCard = card;
+        contentLayout.show(contentPanel, card);
+    }
+
     private JPanel createLoginPanel() {
         JPanel panel = new JPanel(new GridBagLayout());
         panel.setBackground(BG);
@@ -130,6 +155,8 @@ public class InstagramProject extends JPanel {
         JButton btnLogin = styledButton("Entrar");
         btnLogin.setBounds(60, 265, 300, 42);
         btnLogin.addActionListener(e -> {
+            clearConfirmHost();
+
             String u = txtUser.getText().trim();
             String p = new String(txtPass.getPassword()).trim();
 
@@ -139,37 +166,43 @@ public class InstagramProject extends JPanel {
                 }
 
                 loggedUser = userManager.login(u, p);
+                connectChat();
                 refreshAll();
                 rootLayout.show(rootPanel, "APP");
-                contentLayout.show(contentPanel, "FEED");
+                showContent("FEED");
+                showInlineInfo("Bienvenido @" + loggedUser.getUsername());
 
             } catch (AccountInactiveException ex) {
-                int opt = JOptionPane.showConfirmDialog(this,
+                showInlineConfirm(
                         "La cuenta está desactivada. ¿Deseas activarla ahora?",
-                        "Activar cuenta",
-                        JOptionPane.YES_NO_OPTION);
-
-                if (opt == JOptionPane.YES_OPTION) {
-                    userManager.setActive(u, true);
-                    try {
-                        loggedUser = userManager.login(u, p);
-                        refreshAll();
-                        rootLayout.show(rootPanel, "APP");
-                        contentLayout.show(contentPanel, "FEED");
-                    } catch (Exception ex2) {
-                        JOptionPane.showMessageDialog(this, ex2.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-                    }
-                }
-
+                        "Activar",
+                        () -> {
+                            userManager.setActive(u, true);
+                            try {
+                                loggedUser = userManager.login(u, p);
+                                connectChat();
+                                refreshAll();
+                                rootLayout.show(rootPanel, "APP");
+                                showContent("FEED");
+                                showInlineInfo("Cuenta activada.");
+                            } catch (Exception ex2) {
+                                showInlineError(ex2.getMessage());
+                            }
+                        }
+                );
             } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this, ex.getMessage(), "Login", JOptionPane.ERROR_MESSAGE);
+                showInlineError(ex.getMessage());
             }
         });
         card.add(btnLogin);
 
         JButton btnRegister = createLinkButton("¿No tienes cuenta? Regístrate");
         btnRegister.setBounds(80, 455, 260, 28);
-        btnRegister.addActionListener(e -> rootLayout.show(rootPanel, "REGISTER"));
+        btnRegister.addActionListener(e -> {
+            clearBannerHost();
+            clearConfirmHost();
+            rootLayout.show(rootPanel, "REGISTER");
+        });
         card.add(btnRegister);
 
         panel.add(card);
@@ -211,6 +244,7 @@ public class InstagramProject extends JPanel {
         JRadioButton rbF = new JRadioButton("F");
         styleRadio(rbM);
         styleRadio(rbF);
+
         ButtonGroup bgGender = new ButtonGroup();
         bgGender.add(rbM);
         bgGender.add(rbF);
@@ -255,12 +289,15 @@ public class InstagramProject extends JPanel {
             if (res == JFileChooser.APPROVE_OPTION) {
                 tempPhotoPath[0] = chooser.getSelectedFile().getAbsolutePath();
                 btnPhoto.setText("Foto: " + chooser.getSelectedFile().getName());
+                showInlineInfo("Foto seleccionada.");
             }
         });
 
         JButton btnCreate = styledButton("Crear cuenta");
         btnCreate.setBounds(60, 390, 340, 42);
         btnCreate.addActionListener(e -> {
+            clearConfirmHost();
+
             try {
                 String nombre = txtNombre.getText().trim();
                 String user = txtUser.getText().trim();
@@ -291,20 +328,27 @@ public class InstagramProject extends JPanel {
 
                 userManager.registrarUsuario(newUser);
                 loggedUser = newUser;
-
+                connectChat();
                 refreshAll();
                 rootLayout.show(rootPanel, "APP");
-                contentLayout.show(contentPanel, "FEED");
+                showContent("FEED");
+                showInlineInfo("Cuenta creada correctamente.");
 
+            } catch (NumberFormatException ex) {
+                showInlineError("La edad debe ser numérica.");
             } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this, ex.getMessage(), "Registro", JOptionPane.ERROR_MESSAGE);
+                showInlineError(ex.getMessage());
             }
         });
         card.add(btnCreate);
 
         JButton btnBack = createLinkButton("¿Ya tienes cuenta? Entrar");
         btnBack.setBounds(100, 580, 250, 24);
-        btnBack.addActionListener(e -> rootLayout.show(rootPanel, "LOGIN"));
+        btnBack.addActionListener(e -> {
+            clearBannerHost();
+            clearConfirmHost();
+            rootLayout.show(rootPanel, "LOGIN");
+        });
         card.add(btnBack);
 
         panel.add(card);
@@ -329,53 +373,56 @@ public class InstagramProject extends JPanel {
         sidebar.add(createSidebarButton("🏠 Inicio", () -> {
             currentProfileUsername = null;
             refreshFeed();
-            contentLayout.show(contentPanel, "FEED");
+            showContent("FEED");
         }));
         sidebar.add(Box.createVerticalStrut(8));
 
         sidebar.add(createSidebarButton("🔍 Buscar", () -> {
             resetSearchView();
-            contentLayout.show(contentPanel, "SEARCH");
+            showContent("SEARCH");
         }));
         sidebar.add(Box.createVerticalStrut(8));
 
         sidebar.add(createSidebarButton("✨ Crear", () -> {
             currentProfileUsername = null;
-            contentLayout.show(contentPanel, "CREATE");
+            showContent("CREATE");
         }));
         sidebar.add(Box.createVerticalStrut(8));
 
         sidebar.add(createSidebarButton("💬 Inbox", () -> {
             currentProfileUsername = null;
             refreshInboxChats();
-            contentLayout.show(contentPanel, "INBOX");
+            showContent("INBOX");
         }));
         sidebar.add(Box.createVerticalStrut(8));
 
         sidebar.add(createSidebarButton("🔔 Notificaciones", () -> {
             currentProfileUsername = null;
             loadNotifications();
-            contentLayout.show(contentPanel, "NOTIFICATIONS");
+            showContent("NOTIFICATIONS");
         }));
         sidebar.add(Box.createVerticalStrut(8));
 
         sidebar.add(createSidebarButton("🔎 Hashtags", () -> {
             currentProfileUsername = null;
-            contentLayout.show(contentPanel, "HASHTAG");
+            showContent("HASHTAG");
         }));
         sidebar.add(Box.createVerticalStrut(8));
 
         sidebar.add(createSidebarButton("👤 Mi perfil", () -> {
             if (loggedUser != null) {
                 showProfile(loggedUser);
-                contentLayout.show(contentPanel, "SEARCH");
             }
         }));
         sidebar.add(Box.createVerticalStrut(22));
 
         sidebar.add(createSidebarButton("🚪 Salir", () -> {
+            disconnectChat();
             loggedUser = null;
             currentProfileUsername = null;
+            openedChatUser = null;
+            clearBannerHost();
+            clearConfirmHost();
             rootLayout.show(rootPanel, "LOGIN");
         }));
 
@@ -439,6 +486,8 @@ public class InstagramProject extends JPanel {
         feedInner.removeAll();
 
         if (loggedUser == null) {
+            feedInner.revalidate();
+            feedInner.repaint();
             return;
         }
 
@@ -466,7 +515,7 @@ public class InstagramProject extends JPanel {
     private JPanel createPostCard(Post post, int width, int imageSize) {
         JPanel card = new JPanel(new BorderLayout());
         card.setBackground(PANEL);
-        card.setMaximumSize(new Dimension(width, imageSize + 180));
+        card.setMaximumSize(new Dimension(width, imageSize + 260));
         card.setBorder(new LineBorder(BORDER, 1, true));
 
         JPanel header = new JPanel(new BorderLayout());
@@ -501,39 +550,63 @@ public class InstagramProject extends JPanel {
         JLabel lblCaption = new JLabel("<html><b>@" + post.getAuthorUsername() + "</b> " + escapeHtml(post.getCaption()) + "</html>");
         lblCaption.setForeground(TEXT);
         footer.add(lblCaption);
+        footer.add(Box.createVerticalStrut(8));
 
-        if (!post.getComments().isEmpty()) {
-            footer.add(Box.createVerticalStrut(8));
-            int limit = Math.min(2, post.getComments().size());
+        List<Comment> comments = post.getComments();
+        if (comments.isEmpty()) {
+            JLabel noComments = new JLabel("Sin comentarios todavía.");
+            noComments.setForeground(MUTED);
+            footer.add(noComments);
+        } else {
+            int limit = Math.min(3, comments.size());
             for (int i = 0; i < limit; i++) {
-                Comment c = post.getComments().get(i);
-                JLabel lbl = new JLabel("<html><b>@" + c.getUsername() + "</b> " + escapeHtml(c.getText()) + " <span style='color:#999999;'>(" + c.getFormattedDate() + ")</span></html>");
+                Comment c = comments.get(i);
+                JLabel lbl = new JLabel("<html><b>@" + c.getUsername() + "</b> "
+                        + escapeHtml(c.getText())
+                        + " <span style='color:#999999;'>(" + c.getFormattedDate() + ")</span></html>");
                 lbl.setForeground(TEXT);
                 footer.add(lbl);
             }
         }
 
-        JButton btnComment = createMiniButton("Comentar");
-        btnComment.addActionListener(e -> {
-            String txt = JOptionPane.showInputDialog(this, "Escribe tu comentario:");
-            if (txt != null && !txt.trim().isEmpty()) {
-                boolean ok = userManager.addCommentAndSave(post, new Comment(loggedUser.getUsername(), txt.trim()));
+        footer.add(Box.createVerticalStrut(10));
 
-                if (ok) {
-                    refreshAll();
+        JPanel commentRow = new JPanel(new BorderLayout(8, 0));
+        commentRow.setBackground(PANEL);
 
-                    if (currentProfileUsername != null) {
-                        User currentProfile = userManager.getUserByUsername(currentProfileUsername);
-                        if (currentProfile != null) {
-                            showProfile(currentProfile);
-                        }
-                    }
+        JTextField txtComment = new JTextField();
+        txtComment.setBackground(INPUT);
+        txtComment.setForeground(TEXT);
+        txtComment.setCaretColor(TEXT);
+        txtComment.setBorder(new EmptyBorder(10, 10, 10, 10));
+
+        JButton btnCommentSend = createMiniButton("Comentar");
+        btnCommentSend.setPreferredSize(new Dimension(110, 40));
+
+        btnCommentSend.addActionListener(e -> {
+            String txt = txtComment.getText().trim();
+            if (txt.isEmpty()) {
+                return;
+            }
+
+            boolean ok = userManager.addCommentAndSave(post, new Comment(loggedUser.getUsername(), txt));
+            if (ok) {
+                txtComment.setText("");
+                refreshAll();
+
+                if ("SEARCH".equals(currentContentCard) && currentProfileUsername != null) {
+                    refreshCurrentProfileView();
                 }
+                showInlineInfo("Comentario agregado.");
+            } else {
+                showInlineError("No se pudo guardar el comentario.");
             }
         });
 
-        footer.add(Box.createVerticalStrut(10));
-        footer.add(btnComment);
+        commentRow.add(txtComment, BorderLayout.CENTER);
+        commentRow.add(btnCommentSend, BorderLayout.EAST);
+
+        footer.add(commentRow);
 
         card.add(footer, BorderLayout.SOUTH);
         return card;
@@ -604,7 +677,6 @@ public class InstagramProject extends JPanel {
         searchViewPanel = new JPanel(searchViewLayout);
         searchViewPanel.setBackground(BG);
 
-        // -------- Vista de búsqueda --------
         JPanel searchPage = new JPanel(new BorderLayout());
         searchPage.setBackground(BG);
 
@@ -648,7 +720,6 @@ public class InstagramProject extends JPanel {
         searchPage.add(top, BorderLayout.NORTH);
         searchPage.add(resultsScroll, BorderLayout.CENTER);
 
-        // -------- Vista de perfil --------
         profileViewWrapper = new JPanel(new BorderLayout());
         profileViewWrapper.setBackground(BG);
 
@@ -685,20 +756,15 @@ public class InstagramProject extends JPanel {
 
     private void performUserSearch(String query) {
         if (query == null || query.trim().isEmpty() || query.equals("Escribe un username...")) {
+            showInlineWarning("Escribe un username válido.");
             return;
         }
 
         currentProfileUsername = null;
         searchResultsPanel.removeAll();
 
-        List<User> found = userManager.searchUsers(query.trim());
+        List<User> found = new ArrayList<>(userManager.searchUsers(query.trim()));
 
-        // Si no quieres mostrarte a ti mismo en resultados, descomenta este bloque:
-        /*
-    if (loggedUser != null) {
-        found.removeIf(u -> u.getUsername().equalsIgnoreCase(loggedUser.getUsername()));
-    }
-         */
         if (found.isEmpty()) {
             JLabel empty = new JLabel("No se encontraron usuarios.");
             empty.setForeground(MUTED);
@@ -755,6 +821,20 @@ public class InstagramProject extends JPanel {
         }
 
         currentProfileUsername = target.getUsername();
+        refreshCurrentProfileView();
+        searchViewLayout.show(searchViewPanel, "PROFILE");
+        showContent("SEARCH");
+    }
+
+    private void refreshCurrentProfileView() {
+        if (currentProfileUsername == null || profileViewWrapper == null) {
+            return;
+        }
+
+        User target = userManager.getUserByUsername(currentProfileUsername);
+        if (target == null) {
+            return;
+        }
 
         JPanel profile = buildProfilePanel(target);
 
@@ -768,9 +848,6 @@ public class InstagramProject extends JPanel {
         profileViewWrapper.add(profileScroll, BorderLayout.CENTER);
         profileViewWrapper.revalidate();
         profileViewWrapper.repaint();
-
-        searchViewLayout.show(searchViewPanel, "PROFILE");
-        contentLayout.show(contentPanel, "SEARCH");
     }
 
     private JPanel buildProfilePanel(User target) {
@@ -781,9 +858,12 @@ public class InstagramProject extends JPanel {
         JPanel header = new JPanel(new BorderLayout(20, 0));
         header.setBackground(BG);
 
-        JLabel avatar = new JLabel(cargarImagenCircular(
-                FileManager.getUserImageAbsolutePath(target.getUsername(), target.getFotoPath()), 120));
-        header.add(avatar, BorderLayout.WEST);
+        JPanel avatarWrap = new JPanel(new GridBagLayout());
+        avatarWrap.setBackground(BG);
+        avatarWrap.setPreferredSize(new Dimension(180, 160));
+        avatarWrap.add(new JLabel(cargarImagenCircular(
+                FileManager.getUserImageAbsolutePath(target.getUsername(), target.getFotoPath()), 120)));
+        header.add(avatarWrap, BorderLayout.WEST);
 
         JPanel center = new JPanel();
         center.setBackground(BG);
@@ -818,35 +898,35 @@ public class InstagramProject extends JPanel {
         actions.setBackground(BG);
         actions.setLayout(new BoxLayout(actions, BoxLayout.Y_AXIS));
 
-        boolean own = loggedUser.getUsername().equalsIgnoreCase(target.getUsername());
+        boolean own = loggedUser != null && loggedUser.getUsername().equalsIgnoreCase(target.getUsername());
 
         if (own) {
             JButton btnPrivacy = styledButton(target.isPrivateAccount() ? "Cambiar a pública" : "Cambiar a privada");
+            btnPrivacy.setMaximumSize(new Dimension(180, 42));
             btnPrivacy.addActionListener(e -> {
                 userManager.togglePrivacy(loggedUser.getUsername());
                 loggedUser = userManager.getUserByUsername(loggedUser.getUsername());
-                showProfile(loggedUser);
+                refreshCurrentProfileView();
+                showInlineInfo("Privacidad actualizada.");
             });
 
-            JButton btnDeactivate = styledButton(loggedUser.isActive() ? "Desactivar cuenta" : "Activar cuenta");
+            JButton btnDeactivate = styledButton("Desactivar cuenta");
+            btnDeactivate.setMaximumSize(new Dimension(180, 42));
             btnDeactivate.setBackground(new Color(160, 60, 60));
             btnDeactivate.addActionListener(e -> {
-                if (loggedUser.isActive()) {
-                    int opt = JOptionPane.showConfirmDialog(this,
-                            "Si desactivas tu cuenta no aparecerás en búsquedas, publicaciones ni podrás iniciar sesión. ¿Continuar?",
-                            "Desactivar cuenta",
-                            JOptionPane.YES_NO_OPTION);
-
-                    if (opt == JOptionPane.YES_OPTION) {
-                        userManager.setActive(loggedUser.getUsername(), false);
-                        loggedUser = null;
-                        rootLayout.show(rootPanel, "LOGIN");
-                    }
-                } else {
-                    userManager.setActive(loggedUser.getUsername(), true);
-                    loggedUser = userManager.getUserByUsername(loggedUser.getUsername());
-                    showProfile(loggedUser);
-                }
+                showInlineConfirm(
+                        "Si desactivas tu cuenta no aparecerás en búsquedas, publicaciones ni podrás iniciar sesión.",
+                        "Desactivar",
+                        () -> {
+                            userManager.setActive(loggedUser.getUsername(), false);
+                            disconnectChat();
+                            loggedUser = null;
+                            currentProfileUsername = null;
+                            openedChatUser = null;
+                            rootLayout.show(rootPanel, "LOGIN");
+                            showInlineInfo("Cuenta desactivada.");
+                        }
+                );
             });
 
             actions.add(btnPrivacy);
@@ -858,14 +938,15 @@ public class InstagramProject extends JPanel {
                 actions.add(createRequestsPanel(target));
             }
         } else {
-            boolean following = loggedUser.isFollowing(target.getUsername());
-            boolean requested = userManager.getPendingRequests(target.getUsername())
+            boolean following = loggedUser != null && loggedUser.isFollowing(target.getUsername());
+            boolean requested = loggedUser != null && userManager.getPendingRequests(target.getUsername())
                     .stream()
                     .anyMatch(r -> r.equalsIgnoreCase(loggedUser.getUsername()));
 
             JButton btnFollow = styledButton(
                     following ? "Dejar de seguir" : (requested ? "Solicitud enviada" : "Seguir")
             );
+            btnFollow.setMaximumSize(new Dimension(180, 42));
 
             if (requested) {
                 btnFollow.setEnabled(false);
@@ -879,27 +960,30 @@ public class InstagramProject extends JPanel {
                 loggedUser = userManager.getUserByUsername(loggedUser.getUsername());
 
                 if (!wasFollowing && isPrivate && !loggedUser.isFollowing(target.getUsername())) {
-                    JOptionPane.showMessageDialog(this, "Solicitud enviada.");
+                    showInlineInfo("Solicitud enviada.");
+                } else if (wasFollowing) {
+                    showInlineInfo("Has dejado de seguir a @" + target.getUsername());
+                } else {
+                    showInlineInfo("Ahora sigues a @" + target.getUsername());
                 }
 
-                showProfile(target);
+                refreshCurrentProfileView();
                 refreshFeed();
             });
 
             JButton btnMsg = styledButton("Enviar mensaje");
+            btnMsg.setMaximumSize(new Dimension(180, 42));
             btnMsg.setBackground(new Color(255, 105, 180));
             btnMsg.addActionListener(e -> {
                 if (!userManager.canSendMessage(loggedUser.getUsername(), target.getUsername())) {
-                    JOptionPane.showMessageDialog(this,
-                            "No puedes enviar mensajes todavía. Debes ser seguidor aprobado en una cuenta privada.",
-                            "Inbox", JOptionPane.WARNING_MESSAGE);
+                    showInlineWarning("No puedes enviar mensajes todavía. Debes ser seguidor aprobado en una cuenta privada.");
                     return;
                 }
 
                 openedChatUser = target.getUsername();
                 refreshInboxChats();
                 openConversation(openedChatUser);
-                contentLayout.show(contentPanel, "INBOX");
+                showContent("INBOX");
             });
 
             actions.add(btnFollow);
@@ -914,7 +998,7 @@ public class InstagramProject extends JPanel {
         body.setBackground(BG);
         body.setBorder(new EmptyBorder(25, 0, 0, 0));
 
-        boolean canView = userManager.canViewProfileContent(loggedUser.getUsername(), target.getUsername());
+        boolean canView = userManager.canViewProfileContent(loggedUser != null ? loggedUser.getUsername() : null, target.getUsername());
 
         if (!canView) {
             JPanel locked = new JPanel(new GridBagLayout());
@@ -989,33 +1073,39 @@ public class InstagramProject extends JPanel {
             ok.addActionListener(e -> {
                 try {
                     userManager.approveFollowRequest(me.getUsername(), follower);
+                    loggedUser = userManager.getUserByUsername(loggedUser.getUsername());
+                    refreshCurrentProfileView();
+                    refreshFeed();
+                    showInlineInfo("Solicitud aceptada.");
 
-                    int followBack = JOptionPane.showConfirmDialog(
-                            this,
+                    showInlineConfirm(
                             "Solicitud aceptada. ¿Deseas seguir también a @" + follower + "?",
-                            "Seguir de vuelta",
-                            JOptionPane.YES_NO_OPTION
+                            "Seguir",
+                            () -> {
+                                try {
+                                    userManager.followBackDirect(me.getUsername(), follower);
+                                    loggedUser = userManager.getUserByUsername(loggedUser.getUsername());
+                                    refreshCurrentProfileView();
+                                    refreshFeed();
+                                    showInlineInfo("Ahora también sigues a @" + follower);
+                                } catch (Exception ex) {
+                                    showInlineError(ex.getMessage());
+                                }
+                            }
                     );
 
-                    if (followBack == JOptionPane.YES_OPTION) {
-                        userManager.followBackDirect(me.getUsername(), follower);
-                    }
-
-                    loggedUser = userManager.getUserByUsername(loggedUser.getUsername());
-                    showProfile(loggedUser);
-                    refreshFeed();
-
                 } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(this, ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                    showInlineError(ex.getMessage());
                 }
             });
 
             no.addActionListener(e -> {
                 try {
                     userManager.rejectFollowRequest(me.getUsername(), follower);
-                    showProfile(loggedUser);
+                    refreshCurrentProfileView();
+                    showInlineInfo("Solicitud rechazada.");
                 } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(this, ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                    showInlineError(ex.getMessage());
                 }
             });
 
@@ -1092,8 +1182,9 @@ public class InstagramProject extends JPanel {
                     }
 
                     lblInfo.setText(selectedImages.size() + " imagen(es) seleccionada(s)");
+                    showInlineInfo("Imágenes cargadas.");
                 } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(this, ex.getMessage(), "Imagen", JOptionPane.ERROR_MESSAGE);
+                    showInlineError(ex.getMessage());
                 }
             }
         });
@@ -1123,10 +1214,11 @@ public class InstagramProject extends JPanel {
                 lblInfo.setText("0 imágenes seleccionadas");
 
                 refreshFeed();
-                contentLayout.show(contentPanel, "FEED");
+                showContent("FEED");
+                showInlineInfo("Publicación creada.");
 
             } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this, ex.getMessage(), "Publicar", JOptionPane.ERROR_MESSAGE);
+                showInlineError(ex.getMessage());
             }
         });
 
@@ -1169,9 +1261,15 @@ public class InstagramProject extends JPanel {
     }
 
     private void loadNotifications() {
+        if (notificationsListPanel == null) {
+            return;
+        }
+
         notificationsListPanel.removeAll();
 
         if (loggedUser == null) {
+            notificationsListPanel.revalidate();
+            notificationsListPanel.repaint();
             return;
         }
 
@@ -1242,6 +1340,10 @@ public class InstagramProject extends JPanel {
 
         btnSearch.addActionListener(e -> {
             String tag = txtTag.getText().trim();
+            if (tag.isEmpty()) {
+                showInlineWarning("Escribe un hashtag.");
+                return;
+            }
             if (!tag.startsWith("#")) {
                 tag = "#" + tag;
             }
@@ -1351,7 +1453,7 @@ public class InstagramProject extends JPanel {
 
             User u = userManager.getUserByUsername(target);
             if (u == null || !u.isActive()) {
-                JOptionPane.showMessageDialog(this, "Usuario no encontrado.", "Inbox", JOptionPane.WARNING_MESSAGE);
+                showInlineWarning("Usuario no encontrado.");
                 return;
             }
 
@@ -1459,6 +1561,10 @@ public class InstagramProject extends JPanel {
         sp.getViewport().setBackground(BG);
         sp.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
 
+        JPanel pickerPanel = new JPanel(new BorderLayout());
+        pickerPanel.setBackground(BG);
+        pickerPanel.setBorder(new EmptyBorder(0, 10, 6, 10));
+
         JPanel composer = new JPanel(new BorderLayout(8, 0));
         composer.setBackground(BG);
         composer.setBorder(new EmptyBorder(10, 10, 10, 10));
@@ -1486,31 +1592,27 @@ public class InstagramProject extends JPanel {
                 return;
             }
 
-            try {
-                userManager.sendMessage(loggedUser.getUsername(), otherUsername, text, MessageType.TEXT);
-                txt.setText("");
-                openConversation(otherUsername);
-                refreshInboxChats();
-            } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this, ex.getMessage(), "Inbox", JOptionPane.WARNING_MESSAGE);
-            }
-        });
-
-        btnEmoji.addActionListener(e -> {
-            String[] stickers = {"❤️", "😂", "👏", "😢", "😊"};
-            String pick = (String) JOptionPane.showInputDialog(this, "Elige un sticker", "Sticker",
-                    JOptionPane.PLAIN_MESSAGE, null, stickers, stickers[0]);
-
-            if (pick == null) {
+            if (chatClient == null || !chatClient.isConnected()) {
+                showInlineError("El chat no está conectado.");
                 return;
             }
 
-            try {
-                userManager.sendMessage(loggedUser.getUsername(), otherUsername, pick, MessageType.STICKER_EMOJI);
-                openConversation(otherUsername);
-                refreshInboxChats();
-            } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this, ex.getMessage(), "Inbox", JOptionPane.WARNING_MESSAGE);
+            Message msg = new Message(loggedUser.getUsername(), otherUsername, text, MessageType.TEXT);
+            boolean sent = chatClient.sendMessage(msg);
+
+            if (sent) {
+                txt.setText("");
+            } else {
+                showInlineError("No se pudo enviar el mensaje.");
+            }
+        });
+
+        btnEmoji.addActionListener(e -> togglePicker(pickerPanel, buildEmojiPicker(otherUsername, pickerPanel)));
+
+        btnSticker.addActionListener(e -> {
+            JPanel stickerPicker = buildStickerPicker(otherUsername, pickerPanel);
+            if (stickerPicker != null) {
+                togglePicker(pickerPanel, stickerPicker);
             }
         });
 
@@ -1522,42 +1624,15 @@ public class InstagramProject extends JPanel {
             if (res == JFileChooser.APPROVE_OPTION) {
                 try {
                     String stickerName = FileManager.saveUserSticker(loggedUser.getUsername(), chooser.getSelectedFile());
-                    JOptionPane.showMessageDialog(this, "Sticker guardado: " + stickerName);
+                    showInlineInfo("Sticker guardado: " + stickerName);
                 } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(this, ex.getMessage(), "Sticker", JOptionPane.ERROR_MESSAGE);
+                    showInlineError(ex.getMessage());
                 }
             }
         });
 
-        btnSticker.addActionListener(e -> {
-            List<String> own = userManager.getOwnStickers(loggedUser.getUsername());
-            if (own.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "No tienes stickers propios. Sube uno primero.");
-                return;
-            }
-
-            String pick = (String) JOptionPane.showInputDialog(this, "Elige tu sticker", "Stickers propios",
-                    JOptionPane.PLAIN_MESSAGE, null, own.toArray(), own.get(0));
-
-            if (pick == null) {
-                return;
-            }
-
-            try {
-                userManager.sendStickerImage(loggedUser.getUsername(), otherUsername, pick);
-                openConversation(otherUsername);
-                refreshInboxChats();
-            } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this, ex.getMessage(), "Inbox", JOptionPane.WARNING_MESSAGE);
-            }
-        });
-
         btnDeleteChat.addActionListener(e -> {
-            int opt = JOptionPane.showConfirmDialog(this,
-                    "¿Borrar la conversación con @" + otherUsername + "?",
-                    "Confirmar", JOptionPane.YES_NO_OPTION);
-
-            if (opt == JOptionPane.YES_OPTION) {
+            showInlineConfirm("¿Borrar la conversación con @" + otherUsername + "?", "Borrar", () -> {
                 try {
                     userManager.deleteConversation(loggedUser.getUsername(), otherUsername);
                     openedChatUser = null;
@@ -1569,10 +1644,12 @@ public class InstagramProject extends JPanel {
                     chatConversationPanel.add(hint, BorderLayout.CENTER);
                     chatConversationPanel.revalidate();
                     chatConversationPanel.repaint();
+
+                    showInlineInfo("Conversación eliminada.");
                 } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(this, ex.getMessage(), "Inbox", JOptionPane.ERROR_MESSAGE);
+                    showInlineError(ex.getMessage());
                 }
-            }
+            });
         });
 
         leftButtons.add(btnEmoji);
@@ -1584,12 +1661,128 @@ public class InstagramProject extends JPanel {
         composer.add(txt, BorderLayout.CENTER);
         composer.add(btnSend, BorderLayout.EAST);
 
+        JPanel southWrap = new JPanel(new BorderLayout());
+        southWrap.setBackground(BG);
+        southWrap.add(pickerPanel, BorderLayout.NORTH);
+        southWrap.add(composer, BorderLayout.SOUTH);
+
         chatConversationPanel.add(sp, BorderLayout.CENTER);
-        chatConversationPanel.add(composer, BorderLayout.SOUTH);
+        chatConversationPanel.add(southWrap, BorderLayout.SOUTH);
         chatConversationPanel.revalidate();
         chatConversationPanel.repaint();
 
         SwingUtilities.invokeLater(() -> sp.getVerticalScrollBar().setValue(sp.getVerticalScrollBar().getMaximum()));
+    }
+
+    private void togglePicker(JPanel host, JPanel panel) {
+        if (host.getComponentCount() > 0) {
+            host.removeAll();
+            host.revalidate();
+            host.repaint();
+            return;
+        }
+
+        host.removeAll();
+        host.add(panel, BorderLayout.CENTER);
+        host.revalidate();
+        host.repaint();
+    }
+
+    private JPanel buildEmojiPicker(String otherUsername, JPanel host) {
+        JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 6));
+        panel.setBackground(PANEL);
+        panel.setBorder(new LineBorder(BORDER, 1, true));
+
+        String[] emojis = {"❤️", "😂", "👏", "😢", "😊", "🔥", "👍", "😍"};
+
+        for (String emoji : emojis) {
+            JButton btn = new JButton(emoji);
+            btn.setFont(new Font("SansSerif", Font.PLAIN, 20));
+            btn.setBackground(INPUT);
+            btn.setForeground(TEXT);
+            btn.setBorder(new LineBorder(BORDER, 1));
+            btn.setFocusPainted(false);
+            btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+            btn.addActionListener(e -> {
+                if (chatClient == null || !chatClient.isConnected()) {
+                    showInlineError("El chat no está conectado.");
+                    return;
+                }
+
+                Message msg = new Message(loggedUser.getUsername(), otherUsername, emoji, MessageType.STICKER_EMOJI);
+                boolean sent = chatClient.sendMessage(msg);
+
+                if (!sent) {
+                    showInlineError("No se pudo enviar el sticker.");
+                }
+
+                host.removeAll();
+                host.revalidate();
+                host.repaint();
+            });
+
+            panel.add(btn);
+        }
+
+        return panel;
+    }
+
+    private JPanel buildStickerPicker(String otherUsername, JPanel host) {
+        List<String> own = userManager.getOwnStickers(loggedUser.getUsername());
+        if (own.isEmpty()) {
+            showInlineWarning("No tienes stickers propios. Sube uno primero.");
+            return null;
+        }
+
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
+        row.setBackground(PANEL);
+
+        for (String sticker : own) {
+            JButton btn = new JButton(cargarImagenRectangular(
+                    FileManager.getUserStickerAbsolutePath(loggedUser.getUsername(), sticker), 70, 70));
+            btn.setBackground(INPUT);
+            btn.setBorder(new LineBorder(BORDER, 1));
+            btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+            btn.addActionListener(e -> {
+                if (chatClient == null || !chatClient.isConnected()) {
+                    showInlineError("El chat no está conectado.");
+                    return;
+                }
+
+                Message msg = new Message(
+                        loggedUser.getUsername(),
+                        otherUsername,
+                        sticker,
+                        MessageType.STICKER_IMAGE,
+                        loggedUser.getUsername()
+                );
+
+                boolean sent = chatClient.sendMessage(msg);
+                if (!sent) {
+                    showInlineError("No se pudo enviar el sticker.");
+                }
+
+                host.removeAll();
+                host.revalidate();
+                host.repaint();
+            });
+
+            row.add(btn);
+        }
+
+        JScrollPane scroll = new JScrollPane(row);
+        scroll.setBorder(new LineBorder(BORDER, 1, true));
+        scroll.getViewport().setBackground(PANEL);
+        scroll.setPreferredSize(new Dimension(520, 96));
+        scroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        scroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_NEVER);
+
+        JPanel wrap = new JPanel(new BorderLayout());
+        wrap.setBackground(BG);
+        wrap.add(scroll, BorderLayout.CENTER);
+        return wrap;
     }
 
     private JPanel createMessageBubble(Message m) {
@@ -1604,21 +1797,37 @@ public class InstagramProject extends JPanel {
         bubble.setBackground(mine ? BLUE : new Color(50, 50, 50));
         bubble.setMaximumSize(new Dimension(360, 220));
 
-        if (m.getType() == MessageType.TEXT || m.getType() == MessageType.STICKER_EMOJI) {
+        if (m.getType() == MessageType.TEXT) {
             JLabel lbl = new JLabel("<html>" + escapeHtml(m.getContent()) + "</html>");
             lbl.setForeground(Color.WHITE);
+            lbl.setFont(new Font("SansSerif", Font.PLAIN, 14));
             bubble.add(lbl);
+
+        } else if (m.getType() == MessageType.STICKER_EMOJI) {
+            JLabel lblEmoji = new JLabel(m.getContent());
+            lblEmoji.setForeground(Color.WHITE);
+
+            // En Windows normalmente este font renderiza mejor emojis
+            lblEmoji.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 28));
+
+            lblEmoji.setAlignmentX(Component.LEFT_ALIGNMENT);
+            bubble.add(lblEmoji);
+
         } else if (m.getType() == MessageType.STICKER_IMAGE) {
-            String path = FileManager.getUserStickerAbsolutePath(m.getAssetOwner(), m.getContent());
+            String owner = m.getAssetOwner() != null ? m.getAssetOwner() : m.getFrom();
+            String path = FileManager.getUserStickerAbsolutePath(owner, m.getContent());
+
             JLabel img = new JLabel(cargarImagenRectangular(path, 130, 130));
             img.setAlignmentX(Component.LEFT_ALIGNMENT);
             bubble.add(img);
         }
 
         bubble.add(Box.createVerticalStrut(5));
+
         JLabel time = new JLabel(m.getFormattedDateTime());
         time.setForeground(new Color(230, 230, 230));
         time.setFont(new Font("SansSerif", Font.PLAIN, 10));
+        time.setAlignmentX(Component.LEFT_ALIGNMENT);
         bubble.add(time);
 
         if (mine) {
@@ -1632,7 +1841,7 @@ public class InstagramProject extends JPanel {
 
     private void showPostDialog(Post post) {
         JDialog dialog = new JDialog((Frame) SwingUtilities.getWindowAncestor(this), "Publicación", true);
-        dialog.setSize(820, 700);
+        dialog.setSize(820, 760);
         dialog.setLocationRelativeTo(this);
         dialog.setLayout(new BorderLayout());
         dialog.getContentPane().setBackground(BG);
@@ -1650,7 +1859,6 @@ public class InstagramProject extends JPanel {
 
         JPanel card = createPostCard(freshPost, 760, 520);
         dialog.add(card, BorderLayout.CENTER);
-
         dialog.setVisible(true);
     }
 
@@ -1658,9 +1866,208 @@ public class InstagramProject extends JPanel {
         if (loggedUser != null) {
             loggedUser = userManager.getUserByUsername(loggedUser.getUsername());
         }
+
         refreshFeed();
         loadNotifications();
         refreshInboxChats();
+
+        if ("SEARCH".equals(currentContentCard) && currentProfileUsername != null) {
+            refreshCurrentProfileView();
+        }
+    }
+
+    private void connectChat() {
+        disconnectChat();
+
+        if (loggedUser == null) {
+            return;
+        }
+
+        chatClient = new ChatClient();
+
+        boolean ok = chatClient.connect(loggedUser.getUsername(), new ChatListener() {
+            @Override
+            public void onIncomingMessage(Message message) {
+                SwingUtilities.invokeLater(() -> handleIncomingSocketMessage(message));
+            }
+
+            @Override
+            public void onSystemMessage(String text) {
+                SwingUtilities.invokeLater(() -> showInlineError(text));
+            }
+
+            @Override
+            public void onConnectionStateChanged(boolean connected) {
+                SwingUtilities.invokeLater(() -> {
+                    if (!connected) {
+                        showInlineWarning("Chat desconectado.");
+                    }
+                });
+            }
+        });
+
+        if (!ok) {
+            showInlineWarning("No se pudo conectar el chat en tiempo real.");
+        }
+    }
+
+    private void disconnectChat() {
+        if (chatClient != null) {
+            chatClient.disconnect();
+            chatClient = null;
+        }
+    }
+
+    private void handleIncomingSocketMessage(Message message) {
+        if (loggedUser == null || message == null) {
+            return;
+        }
+
+        refreshInboxChats();
+
+        String other = message.getFrom().equalsIgnoreCase(loggedUser.getUsername())
+                ? message.getTo()
+                : message.getFrom();
+
+        if (openedChatUser != null && openedChatUser.equalsIgnoreCase(other)) {
+            openConversation(openedChatUser);
+        } else if (!message.getFrom().equalsIgnoreCase(loggedUser.getUsername())) {
+            showInlineInfo("Nuevo mensaje de @" + message.getFrom());
+        }
+
+        if ("SEARCH".equals(currentContentCard) && currentProfileUsername != null) {
+            refreshCurrentProfileView();
+        }
+
+        refreshFeed();
+    }
+
+    private void clearBannerHost() {
+        if (bannerHost != null) {
+            bannerHost.removeAll();
+            bannerHost.revalidate();
+            bannerHost.repaint();
+        }
+    }
+
+    private void clearConfirmHost() {
+        if (confirmHost != null) {
+            confirmHost.removeAll();
+            confirmHost.revalidate();
+            confirmHost.repaint();
+        }
+    }
+
+    private void showInlineMessage(String text, Color bgColor, int millis) {
+        if (bannerHost == null) {
+            return;
+        }
+
+        clearBannerHost();
+
+        JPanel wrap = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+        wrap.setOpaque(false);
+
+        JPanel panel = new JPanel(new BorderLayout(10, 0));
+        panel.setBackground(bgColor);
+        panel.setBorder(new EmptyBorder(10, 16, 10, 16));
+        panel.setMaximumSize(new Dimension(700, 44));
+
+        JLabel lbl = new JLabel(text);
+        lbl.setForeground(Color.WHITE);
+        lbl.setFont(new Font("SansSerif", Font.BOLD, 13));
+
+        JButton close = new JButton("✕");
+        close.setForeground(Color.WHITE);
+        close.setBackground(bgColor);
+        close.setBorderPainted(false);
+        close.setFocusPainted(false);
+        close.setContentAreaFilled(false);
+        close.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        close.addActionListener(e -> clearBannerHost());
+
+        panel.add(lbl, BorderLayout.CENTER);
+        panel.add(close, BorderLayout.EAST);
+
+        wrap.add(panel);
+        bannerHost.add(wrap);
+        bannerHost.revalidate();
+        bannerHost.repaint();
+
+        if (millis > 0) {
+            Timer timer = new Timer(millis, e -> clearBannerHost());
+            timer.setRepeats(false);
+            timer.start();
+        }
+    }
+
+    private void showInlineInfo(String text) {
+        showInlineMessage(text, new Color(0, 149, 246), 3000);
+    }
+
+    private void showInlineError(String text) {
+        showInlineMessage(text, new Color(180, 60, 60), 4500);
+    }
+
+    private void showInlineWarning(String text) {
+        showInlineMessage(text, new Color(190, 140, 40), 4000);
+    }
+
+    private void showInlineConfirm(String text, String yesText, Runnable onYes) {
+        if (confirmHost == null) {
+            return;
+        }
+
+        clearConfirmHost();
+
+        JPanel wrap = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+        wrap.setOpaque(false);
+
+        JPanel panel = new JPanel(new BorderLayout(10, 0));
+        panel.setBackground(new Color(40, 40, 40));
+        panel.setBorder(new EmptyBorder(12, 16, 12, 16));
+        panel.setMaximumSize(new Dimension(760, 56));
+
+        JLabel lbl = new JLabel(text);
+        lbl.setForeground(Color.WHITE);
+        lbl.setFont(new Font("SansSerif", Font.BOLD, 13));
+
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        actions.setOpaque(false);
+
+        JButton btnYes = new JButton(yesText);
+        btnYes.setBackground(new Color(0, 149, 246));
+        btnYes.setForeground(Color.WHITE);
+        btnYes.setFocusPainted(false);
+        btnYes.setBorderPainted(false);
+        btnYes.setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+        JButton btnNo = new JButton("Cancelar");
+        btnNo.setBackground(new Color(90, 90, 90));
+        btnNo.setForeground(Color.WHITE);
+        btnNo.setFocusPainted(false);
+        btnNo.setBorderPainted(false);
+        btnNo.setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+        btnYes.addActionListener(e -> {
+            clearConfirmHost();
+            if (onYes != null) {
+                onYes.run();
+            }
+        });
+
+        btnNo.addActionListener(e -> clearConfirmHost());
+
+        actions.add(btnYes);
+        actions.add(btnNo);
+
+        panel.add(lbl, BorderLayout.CENTER);
+        panel.add(actions, BorderLayout.EAST);
+
+        wrap.add(panel);
+        confirmHost.add(wrap);
+        confirmHost.revalidate();
+        confirmHost.repaint();
     }
 
     private JLabel createMutedLabel(String text) {

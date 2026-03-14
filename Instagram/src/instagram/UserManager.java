@@ -8,21 +8,19 @@ import java.io.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+
 /**
  *
  * @author Nathan
  */
 
 /**
- * UserManager:
- * - users.dat serializado (en INSTA_RAIZ)
- * - users.ins (texto) para registro visible
- * - estructura obligatoria por usuario
- * - follow/unfollow con privacidad y solicitudes
- * - inbox (mensajes) en inbox.bin serializado
+ * UserManager: - users.dat serializado (en INSTA_RAIZ) - users.ins (texto) para
+ * registro visible - estructura obligatoria por usuario - follow/unfollow con
+ * privacidad y solicitudes - inbox (mensajes) en inbox.bin serializado
  */
-
 public class UserManager {
+
     private static UserManager instance;
     private List<User> users;
 
@@ -50,6 +48,7 @@ public class UserManager {
         try {
             User user1 = new User("Nathan Alegria", 'M', "NathanPRO", "1234", 25, "default_user.png");
             User user2 = new User("Carlos Pedrito", 'M', "carlitos", "pass", 30, "default_user.png");
+            User user3 = new User("Juanita Alexa", 'F', "Jaun_Al", "Juanita123", 23, "default_user.png");
 
             InstaPaths.ensureUserStructure(user1.getUsername());
             InstaPaths.ensureUserStructure(user2.getUsername());
@@ -382,8 +381,7 @@ public class UserManager {
             return;
         }
 
-        try (BufferedReader reader = new BufferedReader(new FileReader(inputFile));
-             BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile))) {
+        try (BufferedReader reader = new BufferedReader(new FileReader(inputFile)); BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile))) {
 
             String currentLine;
             while ((currentLine = reader.readLine()) != null) {
@@ -409,8 +407,7 @@ public class UserManager {
 
         File tmp = new File(file.getParentFile(), "tmp_" + file.getName());
 
-        try (BufferedReader r = new BufferedReader(new FileReader(file));
-             BufferedWriter w = new BufferedWriter(new FileWriter(tmp))) {
+        try (BufferedReader r = new BufferedReader(new FileReader(file)); BufferedWriter w = new BufferedWriter(new FileWriter(tmp))) {
             String cur;
             while ((cur = r.readLine()) != null) {
                 if (!cur.trim().equalsIgnoreCase(lineToRemove.trim())) {
@@ -629,9 +626,9 @@ public class UserManager {
         List<Message> list = readInbox(owner);
 
         for (Message m : list) {
-            boolean sameChat =
-                    (m.getFrom().equalsIgnoreCase(owner) && m.getTo().equalsIgnoreCase(other)) ||
-                    (m.getFrom().equalsIgnoreCase(other) && m.getTo().equalsIgnoreCase(owner));
+            boolean sameChat
+                    = (m.getFrom().equalsIgnoreCase(owner) && m.getTo().equalsIgnoreCase(other))
+                    || (m.getFrom().equalsIgnoreCase(other) && m.getTo().equalsIgnoreCase(owner));
 
             if (sameChat && m.getTo().equalsIgnoreCase(owner)) {
                 m.markRead();
@@ -643,9 +640,9 @@ public class UserManager {
 
     public void deleteConversation(String owner, String other) throws IOException {
         List<Message> list = readInbox(owner);
-        list.removeIf(m ->
-                (m.getFrom().equalsIgnoreCase(owner) && m.getTo().equalsIgnoreCase(other)) ||
-                (m.getFrom().equalsIgnoreCase(other) && m.getTo().equalsIgnoreCase(owner))
+        list.removeIf(m
+                -> (m.getFrom().equalsIgnoreCase(owner) && m.getTo().equalsIgnoreCase(other))
+                || (m.getFrom().equalsIgnoreCase(other) && m.getTo().equalsIgnoreCase(owner))
         );
         writeInbox(owner, list);
     }
@@ -668,9 +665,9 @@ public class UserManager {
         int c = 0;
 
         for (Message m : readInbox(owner)) {
-            boolean sameChat =
-                    (m.getFrom().equalsIgnoreCase(owner) && m.getTo().equalsIgnoreCase(other)) ||
-                    (m.getFrom().equalsIgnoreCase(other) && m.getTo().equalsIgnoreCase(owner));
+            boolean sameChat
+                    = (m.getFrom().equalsIgnoreCase(owner) && m.getTo().equalsIgnoreCase(other))
+                    || (m.getFrom().equalsIgnoreCase(other) && m.getTo().equalsIgnoreCase(owner));
 
             if (sameChat && m.getTo().equalsIgnoreCase(owner) && m.getStatus() == MessageStatus.UNREAD) {
                 c++;
@@ -685,9 +682,9 @@ public class UserManager {
         List<Message> conv = new ArrayList<>();
 
         for (Message m : all) {
-            boolean sameChat =
-                    (m.getFrom().equalsIgnoreCase(owner) && m.getTo().equalsIgnoreCase(other)) ||
-                    (m.getFrom().equalsIgnoreCase(other) && m.getTo().equalsIgnoreCase(owner));
+            boolean sameChat
+                    = (m.getFrom().equalsIgnoreCase(owner) && m.getTo().equalsIgnoreCase(other))
+                    || (m.getFrom().equalsIgnoreCase(other) && m.getTo().equalsIgnoreCase(owner));
 
             if (sameChat) {
                 conv.add(m);
@@ -696,5 +693,22 @@ public class UserManager {
 
         conv.sort(Comparator.comparing(Message::getDateTime));
         return conv;
+    }
+
+    public synchronized void appendDeliveredMessageToInboxes(Message msg) throws IOException {
+        if (msg == null) {
+            return;
+        }
+
+        InstaPaths.ensureUserStructure(msg.getFrom());
+        InstaPaths.ensureUserStructure(msg.getTo());
+
+        List<Message> senderInbox = readInbox(msg.getFrom());
+        senderInbox.add(msg);
+        writeInbox(msg.getFrom(), senderInbox);
+
+        List<Message> receiverInbox = readInbox(msg.getTo());
+        receiverInbox.add(msg);
+        writeInbox(msg.getTo(), receiverInbox);
     }
 }
