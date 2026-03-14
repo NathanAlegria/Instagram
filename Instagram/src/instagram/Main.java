@@ -4,13 +4,13 @@
  */
 package instagram;
 
-import Chat.ChatServerStarter;
 import javax.swing.*;
+import Chat.ChatServerStarter;
 
 /**
  *
  * @author Nathan
- */
+ */ 
 public class Main {
     public static void main(String[] args) {
         ChatServerStarter.startIfNeeded();

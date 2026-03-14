@@ -15,7 +15,6 @@ import java.util.*;
  *
  * @author Nathan
  */
-
 /**
  * UserManager: - users.dat serializado (en INSTA_RAIZ) - users.ins (texto) para
  * registro visible - estructura obligatoria por usuario - follow/unfollow con
@@ -48,16 +47,28 @@ public class UserManager {
 
     private void setupTestData() {
         try {
-            User user1 = new User("Nathan Alegria", 'M', "NathanPRO", "1234", 25, "default_user.png");
-            User user2 = new User("Carlos Pedrito", 'M', "carlitos", "pass", 30, "default_user.png");
-            User user3 = new User("Juanita Alexa", 'F', "Jaun_Al", "Juanita123", 23, "default_user.png");
+            User user1 = new User("Nathan Alegria", 'M', "NathanPRO", "1234", 25, "profile_default_1.jpeg");
+            User user2 = new User("Carlos Pedrito", 'M', "carlitos", "pass", 30, "profile_default_2.png");
+            User user3 = new User("Juanita Alexa", 'F', "Jaun_Al", "Juanita123", 23, "profile_default_3.png");
 
             InstaPaths.ensureUserStructure(user1.getUsername());
             InstaPaths.ensureUserStructure(user2.getUsername());
+            InstaPaths.ensureUserStructure(user3.getUsername());
+
+            copyDefaultProfileImage(user1.getUsername(), "/Recursos/nathan.jpeg", "profile_default_1.jpeg");
+            copyDefaultProfileImage(user2.getUsername(), "/Recursos/carlitos.png", "profile_default_2.png");
+            copyDefaultProfileImage(user3.getUsername(), "/Recursos/juanita.png", "profile_default_3.png");
 
             users.add(user1);
             users.add(user2);
+            users.add(user3);
+
             saveUsers();
+
+            appendUserToIns(user1);
+            appendUserToIns(user2);
+            appendUserToIns(user3);
+
         } catch (Exception e) {
             System.err.println("Error creando test data: " + e.getMessage());
         }
@@ -712,5 +723,43 @@ public class UserManager {
         List<Message> receiverInbox = readInbox(msg.getTo());
         receiverInbox.add(msg);
         writeInbox(msg.getTo(), receiverInbox);
+    }
+
+    private void copyDefaultProfileImage(String username, String resourcePath, String targetFileName) throws IOException {
+        InputStream is = getClass().getResourceAsStream(resourcePath);
+
+        if (is == null) {
+            throw new IOException("No se encontró la imagen de recurso: " + resourcePath);
+        }
+
+        File target = new File(InstaPaths.userImagesFolder(username), targetFileName);
+
+        try (InputStream input = is; FileOutputStream output = new FileOutputStream(target)) {
+            byte[] buffer = new byte[4096];
+            int bytesRead;
+
+            while ((bytesRead = input.read(buffer)) != -1) {
+                output.write(buffer, 0, bytesRead);
+            }
+        }
+    }
+
+    private void appendUserToIns(User user) throws IOException {
+        String userRecord = String.format("%s#%s#%s#%c#%d#%s#%s#%b#%s",
+                user.getUsername(),
+                user.getPassword(),
+                user.getNombre(),
+                user.getGenero(),
+                user.getEdad(),
+                user.getFotoPath(),
+                user.getJoinDate().toString(),
+                user.isActive(),
+                user.getAccountType().name()
+        );
+
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(InstaPaths.usersIns(), true))) {
+            writer.write(userRecord);
+            writer.newLine();
+        }
     }
 }
