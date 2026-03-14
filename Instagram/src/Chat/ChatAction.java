@@ -2,17 +2,12 @@
  * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
  * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
  */
-package instagram;
-
-import Logica.VisualMode;
+package Chat;
 
 /**
  *
  * @author Nathan
  */
-public final class Config {
-    public static final VisualMode MODO = VisualMode.DESKTOP;
-
-    private Config() {
-    }
+public enum ChatAction {
+    REGISTER, SEND, MESSAGE, ERROR
 }

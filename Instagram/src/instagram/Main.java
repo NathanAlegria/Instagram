@@ -4,6 +4,7 @@
  */
 package instagram;
 
+import Chat.ChatServerStarter;
 import javax.swing.*;
 
 /**
@@ -23,4 +24,4 @@ public class Main {
             frame.setVisible(true);
         });
     }
-}
+} 

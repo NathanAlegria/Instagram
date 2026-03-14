@@ -4,6 +4,18 @@
  */
 package instagram;
 
+import Chat.ChatClient;
+import Chat.ChatListener;
+import Logica.MessageType;
+import Logica.FileManager;
+import Logica.UserManager;
+import Logica.Comment;
+import Logica.AccountType;
+import Logica.Post;
+import Logica.Message;
+import Logica.User;
+import Exceptions.AccountInactiveException;
+import Exceptions.EmptyFieldException;
 import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
