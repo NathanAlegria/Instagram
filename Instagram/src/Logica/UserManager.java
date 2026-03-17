@@ -10,6 +10,10 @@ import java.io.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
+import java.nio.file.StandardOpenOption;
 
 /**
  *
@@ -24,6 +28,9 @@ public class UserManager {
 
     private static UserManager instance;
     private List<User> users;
+    private final Map<String, FileChannel> sessionChannels = new HashMap<>();
+    private final Map<String, FileLock> sessionLocks = new HashMap<>();
+    private static final String[] DEFAULT_USERNAMES = {"NathanPRO", "carlitos", "Jaun_Al"};
 
     private UserManager() {
         try {
@@ -68,6 +75,10 @@ public class UserManager {
             appendUserToIns(user1);
             appendUserToIns(user2);
             appendUserToIns(user3);
+
+            forceMutualFollow("NathanPRO", "carlitos");
+            forceMutualFollow("NathanPRO", "Jaun_Al");
+            forceMutualFollow("carlitos", "Jaun_Al");
 
         } catch (Exception e) {
             System.err.println("Error creando test data: " + e.getMessage());
@@ -154,6 +165,8 @@ public class UserManager {
 
         users.add(newUser);
         saveUsers();
+
+        autoLinkWithDefaultUsers(newUser.getUsername());
     }
 
     public User login(String username, String password) throws InvalidCredentialsException, AccountInactiveException {
@@ -168,6 +181,10 @@ public class UserManager {
 
         if (!user.isActive()) {
             throw new AccountInactiveException("Tu cuenta está desactivada.");
+        }
+
+        if (!acquireSession(username)) {
+            throw new InvalidCredentialsException("Esta cuenta ya tiene una sesión abierta.");
         }
 
         return user;
@@ -479,7 +496,7 @@ public class UserManager {
 
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
         String dateString = post.getDate().format(formatter);
-        String images = String.join("|", post.getImageName());
+        String images = String.join("|", post.getImageNames());
 
         String record = String.format("%s#%s#%s#%s",
                 post.getUsername(),
@@ -760,6 +777,116 @@ public class UserManager {
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(InstaPaths.usersIns(), true))) {
             writer.write(userRecord);
             writer.newLine();
+        }
+    }
+
+    private void forceFollow(User follower, User target) throws IOException {
+        if (follower == null || target == null) {
+            return;
+        }
+
+        if (follower.getUsername().equalsIgnoreCase(target.getUsername())) {
+            return;
+        }
+
+        if (!follower.isFollowing(target.getUsername())) {
+            follower.follow(target.getUsername());
+            target.addFollower(follower.getUsername());
+
+            writeLineUnique(InstaPaths.followingIns(follower.getUsername()), target.getUsername());
+            writeLineUnique(InstaPaths.followersIns(target.getUsername()), follower.getUsername());
+        }
+    }
+
+    private void forceMutualFollow(String usernameA, String usernameB) throws IOException {
+        User a = getUserByUsername(usernameA);
+        User b = getUserByUsername(usernameB);
+
+        if (a == null || b == null) {
+            return;
+        }
+
+        forceFollow(a, b);
+        forceFollow(b, a);
+
+        saveUser(a);
+        saveUser(b);
+    }
+
+    private void autoLinkWithDefaultUsers(String newUsername) throws IOException {
+        for (String defaultUsername : DEFAULT_USERNAMES) {
+            if (!defaultUsername.equalsIgnoreCase(newUsername)) {
+                forceMutualFollow(newUsername, defaultUsername);
+            }
+        }
+    }
+
+    private File getSessionsFolder() {
+        File folder = new File(InstaPaths.ROOT, "sessions");
+        if (!folder.exists()) {
+            folder.mkdirs();
+        }
+        return folder;
+    }
+
+    private File getSessionLockFile(String username) {
+        return new File(getSessionsFolder(), username.toLowerCase() + ".lock");
+    }
+
+    public synchronized boolean acquireSession(String username) {
+        try {
+            String key = username.toLowerCase();
+
+            if (sessionLocks.containsKey(key)) {
+                return false;
+            }
+
+            File lockFile = getSessionLockFile(key);
+            FileChannel channel = FileChannel.open(
+                    lockFile.toPath(),
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.WRITE
+            );
+
+            FileLock lock = channel.tryLock();
+
+            if (lock == null) {
+                channel.close();
+                return false;
+            }
+
+            sessionChannels.put(key, channel);
+            sessionLocks.put(key, lock);
+            return true;
+
+        } catch (OverlappingFileLockException e) {
+            return false;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    public synchronized void releaseSession(String username) {
+        if (username == null) {
+            return;
+        }
+
+        String key = username.toLowerCase();
+
+        try {
+            FileLock lock = sessionLocks.remove(key);
+            if (lock != null && lock.isValid()) {
+                lock.release();
+            }
+        } catch (IOException ignored) {
+        }
+
+        try {
+            FileChannel channel = sessionChannels.remove(key);
+            if (channel != null && channel.isOpen()) {
+                channel.close();
+            }
+        } catch (IOException ignored) {
         }
     }
 }

@@ -16,7 +16,7 @@ public class Main {
         ChatServerStarter.startIfNeeded();
 
         SwingUtilities.invokeLater(() -> {
-            JFrame frame = new JFrame("INSTA - Red Social Visual");
+            JFrame frame = new JFrame("INSTA");
             frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
             frame.setContentPane(new InstagramProject());
             frame.setSize(1366, 768);

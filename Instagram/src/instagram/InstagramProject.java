@@ -429,6 +429,9 @@ public class InstagramProject extends JPanel {
         sidebar.add(Box.createVerticalStrut(22));
 
         sidebar.add(createSidebarButton("🚪 Salir", () -> {
+            if (loggedUser != null) {
+                userManager.releaseSession(loggedUser.getUsername());
+            }
             disconnectChat();
             loggedUser = null;
             currentProfileUsername = null;
@@ -527,7 +530,7 @@ public class InstagramProject extends JPanel {
     private JPanel createPostCard(Post post, int width, int imageSize) {
         JPanel card = new JPanel(new BorderLayout());
         card.setBackground(PANEL);
-        card.setMaximumSize(new Dimension(width, imageSize + 260));
+        card.setMaximumSize(new Dimension(width, imageSize + 280));
         card.setBorder(new LineBorder(BORDER, 1, true));
 
         JPanel header = new JPanel(new BorderLayout());
@@ -562,25 +565,9 @@ public class InstagramProject extends JPanel {
         JLabel lblCaption = new JLabel("<html><b>@" + post.getAuthorUsername() + "</b> " + escapeHtml(post.getCaption()) + "</html>");
         lblCaption.setForeground(TEXT);
         footer.add(lblCaption);
-        footer.add(Box.createVerticalStrut(8));
+        footer.add(Box.createVerticalStrut(10));
 
-        List<Comment> comments = post.getComments();
-        if (comments.isEmpty()) {
-            JLabel noComments = new JLabel("Sin comentarios todavía.");
-            noComments.setForeground(MUTED);
-            footer.add(noComments);
-        } else {
-            int limit = Math.min(3, comments.size());
-            for (int i = 0; i < limit; i++) {
-                Comment c = comments.get(i);
-                JLabel lbl = new JLabel("<html><b>@" + c.getUsername() + "</b> "
-                        + escapeHtml(c.getText())
-                        + " <span style='color:#999999;'>(" + c.getFormattedDate() + ")</span></html>");
-                lbl.setForeground(TEXT);
-                footer.add(lbl);
-            }
-        }
-
+        footer.add(createCommentsScroll(post));
         footer.add(Box.createVerticalStrut(10));
 
         JPanel commentRow = new JPanel(new BorderLayout(8, 0));
@@ -609,6 +596,7 @@ public class InstagramProject extends JPanel {
                 if ("SEARCH".equals(currentContentCard) && currentProfileUsername != null) {
                     refreshCurrentProfileView();
                 }
+
                 showInlineInfo("Comentario agregado.");
             } else {
                 showInlineError("No se pudo guardar el comentario.");
@@ -629,7 +617,14 @@ public class InstagramProject extends JPanel {
         container.setBackground(PANEL);
 
         List<String> imgs = post.getImageNames();
-        if (imgs.isEmpty()) {
+        if (imgs == null || imgs.isEmpty()) {
+            return container;
+        }
+
+        if (imgs.size() == 1) {
+            JLabel img = new JLabel(cargarImagenRectangular(post.getImagePath(0), imageSize, imageSize));
+            img.setHorizontalAlignment(SwingConstants.CENTER);
+            container.add(img, BorderLayout.CENTER);
             return container;
         }
 
@@ -640,43 +635,44 @@ public class InstagramProject extends JPanel {
         for (int i = 0; i < imgs.size(); i++) {
             JLabel img = new JLabel(cargarImagenRectangular(post.getImagePath(i), imageSize, imageSize));
             img.setHorizontalAlignment(SwingConstants.CENTER);
+
             JPanel p = new JPanel(new BorderLayout());
             p.setBackground(PANEL);
             p.add(img, BorderLayout.CENTER);
+
             cards.add(p, String.valueOf(i));
         }
 
         container.add(cards, BorderLayout.CENTER);
 
-        if (imgs.size() > 1) {
-            JButton prev = createRoundNavButton("<");
-            JButton next = createRoundNavButton(">");
+        JButton prev = createRoundNavButton("<");
+        JButton next = createRoundNavButton(">");
 
-            JLabel indicator = new JLabel("1 / " + imgs.size(), SwingConstants.CENTER);
-            indicator.setForeground(TEXT);
+        JLabel indicator = new JLabel("1 / " + imgs.size(), SwingConstants.CENTER);
+        indicator.setForeground(TEXT);
 
-            final int[] index = {0};
+        final int[] index = {0};
 
-            prev.addActionListener(e -> {
-                index[0] = (index[0] - 1 + imgs.size()) % imgs.size();
-                layout.show(cards, String.valueOf(index[0]));
-                indicator.setText((index[0] + 1) + " / " + imgs.size());
-            });
+        prev.addActionListener(e -> {
+            index[0] = (index[0] - 1 + imgs.size()) % imgs.size();
+            layout.show(cards, String.valueOf(index[0]));
+            indicator.setText((index[0] + 1) + " / " + imgs.size());
+        });
 
-            next.addActionListener(e -> {
-                index[0] = (index[0] + 1) % imgs.size();
-                layout.show(cards, String.valueOf(index[0]));
-                indicator.setText((index[0] + 1) + " / " + imgs.size());
-            });
+        next.addActionListener(e -> {
+            index[0] = (index[0] + 1) % imgs.size();
+            layout.show(cards, String.valueOf(index[0]));
+            indicator.setText((index[0] + 1) + " / " + imgs.size());
+        });
 
-            JPanel bottom = new JPanel(new BorderLayout());
-            bottom.setBackground(PANEL);
-            bottom.setBorder(new EmptyBorder(8, 10, 8, 10));
-            bottom.add(prev, BorderLayout.WEST);
-            bottom.add(indicator, BorderLayout.CENTER);
-            bottom.add(next, BorderLayout.EAST);
-            container.add(bottom, BorderLayout.SOUTH);
-        }
+        JPanel bottom = new JPanel(new BorderLayout());
+        bottom.setBackground(PANEL);
+        bottom.setBorder(new EmptyBorder(8, 10, 8, 10));
+        bottom.add(prev, BorderLayout.WEST);
+        bottom.add(indicator, BorderLayout.CENTER);
+        bottom.add(next, BorderLayout.EAST);
+
+        container.add(bottom, BorderLayout.SOUTH);
 
         return container;
     }
@@ -931,6 +927,7 @@ public class InstagramProject extends JPanel {
                         "Desactivar",
                         () -> {
                             userManager.setActive(loggedUser.getUsername(), false);
+                            userManager.releaseSession(loggedUser.getUsername());
                             disconnectChat();
                             loggedUser = null;
                             currentProfileUsername = null;
@@ -951,16 +948,16 @@ public class InstagramProject extends JPanel {
             }
         } else {
             boolean following = loggedUser != null && loggedUser.isFollowing(target.getUsername());
-            boolean requested = loggedUser != null && userManager.getPendingRequests(target.getUsername())
+            boolean requestedAtLoad = loggedUser != null && userManager.getPendingRequests(target.getUsername())
                     .stream()
                     .anyMatch(r -> r.equalsIgnoreCase(loggedUser.getUsername()));
 
             JButton btnFollow = styledButton(
-                    following ? "Dejar de seguir" : (requested ? "Solicitud enviada" : "Seguir")
+                    following ? "Dejar de seguir" : (requestedAtLoad ? "Solicitud enviada" : "Seguir")
             );
             btnFollow.setMaximumSize(new Dimension(180, 42));
 
-            if (requested) {
+            if (requestedAtLoad) {
                 btnFollow.setEnabled(false);
             }
 
@@ -968,13 +965,32 @@ public class InstagramProject extends JPanel {
                 boolean wasFollowing = loggedUser.isFollowing(target.getUsername());
                 boolean isPrivate = target.isPrivateAccount();
 
+                boolean pendingRequest = userManager.getPendingRequests(target.getUsername())
+                        .stream()
+                        .anyMatch(r -> r.equalsIgnoreCase(loggedUser.getUsername()));
+
+                if (!wasFollowing && isPrivate && !pendingRequest) {
+                    showInlineConfirm(
+                            "¿Enviar solicitud de seguimiento a la cuenta privada @" + target.getUsername() + "?",
+                            "Enviar solicitud",
+                            () -> {
+                                userManager.toggleFollow(loggedUser.getUsername(), target.getUsername());
+                                loggedUser = userManager.getUserByUsername(loggedUser.getUsername());
+                                refreshCurrentProfileView();
+                                refreshFeed();
+                                showInlineInfo("Solicitud enviada.");
+                            }
+                    );
+                    return;
+                }
+
                 userManager.toggleFollow(loggedUser.getUsername(), target.getUsername());
                 loggedUser = userManager.getUserByUsername(loggedUser.getUsername());
 
-                if (!wasFollowing && isPrivate && !loggedUser.isFollowing(target.getUsername())) {
-                    showInlineInfo("Solicitud enviada.");
-                } else if (wasFollowing) {
+                if (wasFollowing) {
                     showInlineInfo("Has dejado de seguir a @" + target.getUsername());
+                } else if (isPrivate) {
+                    showInlineInfo("Solicitud enviada.");
                 } else {
                     showInlineInfo("Ahora sigues a @" + target.getUsername());
                 }
@@ -1010,7 +1026,10 @@ public class InstagramProject extends JPanel {
         body.setBackground(BG);
         body.setBorder(new EmptyBorder(25, 0, 0, 0));
 
-        boolean canView = userManager.canViewProfileContent(loggedUser != null ? loggedUser.getUsername() : null, target.getUsername());
+        boolean canView = userManager.canViewProfileContent(
+                loggedUser != null ? loggedUser.getUsername() : null,
+                target.getUsername()
+        );
 
         if (!canView) {
             JPanel locked = new JPanel(new GridBagLayout());
@@ -1187,10 +1206,24 @@ public class InstagramProject extends JPanel {
             if (res == JFileChooser.APPROVE_OPTION) {
                 try {
                     selectedImages.clear();
+
                     File[] files = chooser.getSelectedFiles();
+                    if (files == null || files.length == 0) {
+                        File single = chooser.getSelectedFile();
+                        if (single != null) {
+                            files = new File[]{single};
+                        }
+                    }
+
+                    if (files == null || files.length == 0) {
+                        showInlineWarning("No seleccionaste imágenes.");
+                        return;
+                    }
 
                     for (File file : files) {
-                        selectedImages.add(FileManager.saveUserImage(loggedUser.getUsername(), file, "post"));
+                        if (file != null) {
+                            selectedImages.add(FileManager.saveUserImage(loggedUser.getUsername(), file, "post"));
+                        }
                     }
 
                     lblInfo.setText(selectedImages.size() + " imagen(es) seleccionada(s)");
@@ -1216,7 +1249,12 @@ public class InstagramProject extends JPanel {
                     throw new Exception("Debes seleccionar al menos una imagen.");
                 }
 
-                Post post = new Post(loggedUser.getUsername(), selectedImages, txtCaption.getText().trim());
+                Post post = new Post(
+                        loggedUser.getUsername(),
+                        new ArrayList<>(selectedImages),
+                        txtCaption.getText().trim()
+                );
+
                 userManager.publishPost(post);
 
                 loggedUser = userManager.getUserByUsername(loggedUser.getUsername());
@@ -2285,5 +2323,41 @@ public class InstagramProject extends JPanel {
             return "";
         }
         return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    }
+
+    private JScrollPane createCommentsScroll(Post post) {
+        JPanel commentsPanel = new JPanel();
+        commentsPanel.setLayout(new BoxLayout(commentsPanel, BoxLayout.Y_AXIS));
+        commentsPanel.setBackground(PANEL);
+        commentsPanel.setBorder(new EmptyBorder(6, 6, 6, 6));
+
+        List<Comment> comments = post.getComments();
+
+        if (comments == null || comments.isEmpty()) {
+            JLabel noComments = new JLabel("Sin comentarios todavía.");
+            noComments.setForeground(MUTED);
+            commentsPanel.add(noComments);
+        } else {
+            for (Comment c : comments) {
+                JLabel lbl = new JLabel("<html><b>@" + c.getUsername() + "</b> "
+                        + escapeHtml(c.getText())
+                        + " <span style='color:#999999;'>(" + c.getFormattedDate() + ")</span></html>");
+                lbl.setForeground(TEXT);
+                lbl.setBorder(new EmptyBorder(0, 0, 8, 0));
+                commentsPanel.add(lbl);
+            }
+        }
+
+        JScrollPane scroll = new JScrollPane(commentsPanel);
+        scroll.setBorder(new LineBorder(BORDER, 1));
+        scroll.getViewport().setBackground(PANEL);
+        scroll.setBackground(PANEL);
+        scroll.setPreferredSize(new Dimension(560, 120));
+        scroll.setMaximumSize(new Dimension(560, 120));
+        scroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
+        scroll.getVerticalScrollBar().setUnitIncrement(12);
+
+        return scroll;
     }
 }
