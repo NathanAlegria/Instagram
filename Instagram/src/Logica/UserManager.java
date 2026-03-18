@@ -19,11 +19,6 @@ import java.nio.file.StandardOpenOption;
  *
  * @author Nathan
  */
-/**
- * UserManager: - users.dat serializado (en INSTA_RAIZ) - users.ins (texto) para
- * registro visible - estructura obligatoria por usuario - follow/unfollow con
- * privacidad y solicitudes - inbox (mensajes) en inbox.bin serializado
- */
 public class UserManager {
 
     private static UserManager instance;
@@ -889,4 +884,12 @@ public class UserManager {
         } catch (IOException ignored) {
         }
     }
+    
+    public synchronized void reloadUsersFromDisk() {
+    List<User> diskUsers = loadUsers();
+
+    if (diskUsers != null) {
+        this.users = diskUsers;
+    }
+}
 }

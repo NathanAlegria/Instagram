@@ -12,15 +12,6 @@ import java.util.*;
  *
  * @author Nathan
  */
-
-/**
- * Post con:
- * - id único
- * - imageName (solo nombre)
- * - caption
- * - likes y comments
- */
-
 public class Post implements Serializable {
     private static final long serialVersionUID = 1L;
 

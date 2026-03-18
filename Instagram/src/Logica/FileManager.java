@@ -13,12 +13,6 @@ import java.nio.file.StandardCopyOption;
  *
  * @author Nathan
  */
-
-/**
- * Manejo de archivos cumpliendo el documento:
- * - Todo va a INSTA_RAIZ
- * - Imágenes de usuario van a INSTA_RAIZ/username/imagenes/
- */
 public class FileManager {
 
     public static String saveUserImage(String username, File sourceFile, String prefix) throws IOException {

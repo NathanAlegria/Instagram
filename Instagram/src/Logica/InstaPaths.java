@@ -11,11 +11,6 @@ import java.io.IOException;
  *
  * @author Nathan
  */
-
-/**
- * Clase utilitaria para cumplir el requisito del proyecto:
- * Toda persistencia va dentro de INSTA_RAIZ/
- */
 public class InstaPaths {
 
     public static final File ROOT = new File(System.getProperty("user.dir"), "INSTA_RAIZ");
@@ -27,18 +22,18 @@ public class InstaPaths {
 
     public static File userFolder(String username) { return new File(ROOT, username); }
 
-    // Carpetas obligatorias por usuario
+    // Carpetas por usuario
     public static File userImagesFolder(String username) { return new File(userFolder(username), "imagenes"); }
     public static File userPersonalFolders(String username) { return new File(userFolder(username), "folders_personales"); }
     public static File userPersonalStickers(String username) { return new File(userFolder(username), "stickers_personales"); }
 
-    // Archivos obligatorios por usuario
+    // Archivos por usuario
     public static File followersIns(String username) { return new File(userFolder(username), "followers.ins"); }
     public static File followingIns(String username) { return new File(userFolder(username), "following.ins"); }
     public static File instaIns(String username) { return new File(userFolder(username), "insta.ins"); }
-    public static File inboxBin(String username) { return new File(userFolder(username), "inbox.bin"); } // guardaremos serializado
+    public static File inboxBin(String username) { return new File(userFolder(username), "inbox.bin"); } 
     public static File stickersIns(String username) { return new File(userFolder(username), "stickers.ins"); }
-    public static File requestsIns(String username) { return new File(userFolder(username), "requests.ins"); } // solicitudes follow (privado)
+    public static File requestsIns(String username) { return new File(userFolder(username), "requests.ins"); } // solicitudes follow
 
     public static void ensureBaseStructure() throws IOException {
         if (!ROOT.exists() && !ROOT.mkdirs()) {
@@ -60,7 +55,6 @@ public class InstaPaths {
         safeCreate(instaIns(username));
         safeCreate(stickersIns(username));
         safeCreate(requestsIns(username));
-        // inboxBin se crea al primer envío
 
         // Carpetas
         userImagesFolder(username).mkdirs();

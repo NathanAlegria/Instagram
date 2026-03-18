@@ -12,12 +12,6 @@ import java.util.List;
  *
  * @author Nathan
  */
-
-/**
- * Usuario con:
- * - estado activo/inactivo
- * - tipo de cuenta PUBLIC/PRIVATE (requisito)
- */
 public class User extends AbstractAccount {
     private static final long serialVersionUID = 1L;
 

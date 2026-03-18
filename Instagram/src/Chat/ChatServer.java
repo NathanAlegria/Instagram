@@ -15,8 +15,6 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * @author Nathan
  */
-
-
 public final class ChatServer {
 
     public static final int PORT = 5050;

@@ -26,7 +26,6 @@ public final class ChatServerStarter {
                 server = new ChatServer();
                 server.start();
             } catch (Exception ignored) {
-                // Si ya hay otro server corriendo en otra ventana/proceso, no hacemos nada.
             }
         }, "ChatServerStarter");
 

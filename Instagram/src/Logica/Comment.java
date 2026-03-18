@@ -4,14 +4,14 @@
  */
 package Logica;
 
+import java.io.Serializable;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+
 /**
  *
  * @author Nathan
  */
-    import java.io.Serializable;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-
 public class Comment implements Serializable {
     private static final long serialVersionUID = 1L;
     
@@ -22,7 +22,7 @@ public class Comment implements Serializable {
     public Comment(String username, String text) {
         this.username = username;
         this.text = text;
-        this.date = LocalDateTime.now(); // Marca de tiempo al momento de crearse
+        this.date = LocalDateTime.now(); 
     }
 
     public String getUsername() {
@@ -30,7 +30,6 @@ public class Comment implements Serializable {
     }
 
     public String getText() {
-        // Implementar lógica para parsear @menciones y #hashtags si es necesario.
         return text;
     }
     
@@ -38,7 +37,6 @@ public class Comment implements Serializable {
         return date;
     }
     
-    // Método de ayuda para mostrar la fecha formateada
     public String getFormattedDate() {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
         return date.format(formatter);

@@ -16,6 +16,8 @@ import Logica.Message;
 import Logica.User;
 import Exceptions.AccountInactiveException;
 import Exceptions.EmptyFieldException;
+import Logica.StickerMessage;
+import Logica.TextMessage;
 import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -77,6 +79,7 @@ public class InstagramProject extends JPanel {
     private String openedChatUser;
 
     private ChatClient chatClient;
+    private Timer liveDataTimer;
 
     public InstagramProject() {
         userManager = UserManager.getInstance();
@@ -179,6 +182,7 @@ public class InstagramProject extends JPanel {
 
                 loggedUser = userManager.login(u, p);
                 connectChat();
+                startLiveDataRefresh();
                 refreshAll();
                 rootLayout.show(rootPanel, "APP");
                 showContent("FEED");
@@ -341,6 +345,7 @@ public class InstagramProject extends JPanel {
                 userManager.registrarUsuario(newUser);
                 loggedUser = newUser;
                 connectChat();
+                startLiveDataRefresh();
                 refreshAll();
                 rootLayout.show(rootPanel, "APP");
                 showContent("FEED");
@@ -432,6 +437,7 @@ public class InstagramProject extends JPanel {
             if (loggedUser != null) {
                 userManager.releaseSession(loggedUser.getUsername());
             }
+            stopLiveDataRefresh();
             disconnectChat();
             loggedUser = null;
             currentProfileUsername = null;
@@ -504,6 +510,13 @@ public class InstagramProject extends JPanel {
             feedInner.revalidate();
             feedInner.repaint();
             return;
+        }
+
+        userManager.reloadUsersFromDisk();
+
+        User refreshed = userManager.getUserByUsername(loggedUser.getUsername());
+        if (refreshed != null) {
+            loggedUser = refreshed;
         }
 
         List<Post> posts = userManager.getAllRelevantPostsByDate(loggedUser);
@@ -839,6 +852,8 @@ public class InstagramProject extends JPanel {
             return;
         }
 
+        userManager.reloadUsersFromDisk();
+
         User target = userManager.getUserByUsername(currentProfileUsername);
         if (target == null) {
             return;
@@ -928,6 +943,7 @@ public class InstagramProject extends JPanel {
                         () -> {
                             userManager.setActive(loggedUser.getUsername(), false);
                             userManager.releaseSession(loggedUser.getUsername());
+                            stopLiveDataRefresh();
                             disconnectChat();
                             loggedUser = null;
                             currentProfileUsername = null;
@@ -1647,7 +1663,7 @@ public class InstagramProject extends JPanel {
                 return;
             }
 
-            Message msg = new Message(loggedUser.getUsername(), otherUsername, text, MessageType.TEXT);
+            Message msg = new TextMessage(loggedUser.getUsername(), otherUsername, text);
             boolean sent = chatClient.sendMessage(msg);
 
             if (sent) {
@@ -1760,7 +1776,7 @@ public class InstagramProject extends JPanel {
                     return;
                 }
 
-                Message msg = new Message(loggedUser.getUsername(), otherUsername, emoji, MessageType.STICKER_EMOJI);
+                Message msg = new StickerMessage(loggedUser.getUsername(), otherUsername, emoji, MessageType.STICKER_EMOJI);
                 boolean sent = chatClient.sendMessage(msg);
 
                 if (!sent) {
@@ -1801,7 +1817,7 @@ public class InstagramProject extends JPanel {
                     return;
                 }
 
-                Message msg = new Message(
+                Message msg = new StickerMessage(
                         loggedUser.getUsername(),
                         otherUsername,
                         sticker,
@@ -2325,6 +2341,27 @@ public class InstagramProject extends JPanel {
         return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
+    //Recursiva
+    private void addCommentsRecursive(List<Comment> comments, JPanel commentsPanel, int index) {
+        // Caso base
+        if (comments == null || index >= comments.size()) {
+            return;
+        }
+
+        Comment c = comments.get(index);
+
+        JLabel lbl = new JLabel("<html><b>@" + c.getUsername() + "</b> "
+                + escapeHtml(c.getText())
+                + " <span style='color:#999999;'>(" + c.getFormattedDate() + ")</span></html>");
+        lbl.setForeground(TEXT);
+        lbl.setBorder(new EmptyBorder(0, 0, 8, 0));
+
+        commentsPanel.add(lbl);
+
+        // Llamada recursiva down
+        addCommentsRecursive(comments, commentsPanel, index + 1);
+    }
+
     private JScrollPane createCommentsScroll(Post post) {
         JPanel commentsPanel = new JPanel();
         commentsPanel.setLayout(new BoxLayout(commentsPanel, BoxLayout.Y_AXIS));
@@ -2338,14 +2375,7 @@ public class InstagramProject extends JPanel {
             noComments.setForeground(MUTED);
             commentsPanel.add(noComments);
         } else {
-            for (Comment c : comments) {
-                JLabel lbl = new JLabel("<html><b>@" + c.getUsername() + "</b> "
-                        + escapeHtml(c.getText())
-                        + " <span style='color:#999999;'>(" + c.getFormattedDate() + ")</span></html>");
-                lbl.setForeground(TEXT);
-                lbl.setBorder(new EmptyBorder(0, 0, 8, 0));
-                commentsPanel.add(lbl);
-            }
+            addCommentsRecursive(comments, commentsPanel, 0);
         }
 
         JScrollPane scroll = new JScrollPane(commentsPanel);
@@ -2359,5 +2389,60 @@ public class InstagramProject extends JPanel {
         scroll.getVerticalScrollBar().setUnitIncrement(12);
 
         return scroll;
+    }
+
+    private void startLiveDataRefresh() {
+        stopLiveDataRefresh();
+
+        liveDataTimer = new Timer(2500, e -> refreshVisibleDataFromDisk());
+        liveDataTimer.start();
+    }
+
+    private void stopLiveDataRefresh() {
+        if (liveDataTimer != null) {
+            liveDataTimer.stop();
+            liveDataTimer = null;
+        }
+    }
+
+    private void refreshVisibleDataFromDisk() {
+        if (loggedUser == null) {
+            return;
+        }
+
+        Component focusOwner = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+
+        if (focusOwner instanceof JTextField || focusOwner instanceof JTextArea) {
+            return;
+        }
+
+        userManager.reloadUsersFromDisk();
+
+        User refreshedLogged = userManager.getUserByUsername(loggedUser.getUsername());
+        if (refreshedLogged != null) {
+            loggedUser = refreshedLogged;
+        }
+
+        if ("FEED".equals(currentContentCard)) {
+            refreshFeed();
+        } else if ("SEARCH".equals(currentContentCard) && currentProfileUsername != null) {
+            refreshCurrentProfileView();
+        } else if ("NOTIFICATIONS".equals(currentContentCard)) {
+            loadNotifications();
+        }
+    }
+
+    private boolean isUserTyping() {
+        Component focusOwner = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+
+        if (focusOwner instanceof JTextField) {
+            return true;
+        }
+
+        if (focusOwner instanceof JTextArea) {
+            return true;
+        }
+
+        return false;
     }
 }
